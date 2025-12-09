@@ -32,11 +32,22 @@ module RedmineHelpdesk
           
           # any cc handling needed?
           custom_value = custom_field_value(issue.project,'cc-handling')
-          if (!@email.cc.nil?) && (custom_value.value == '1')
-            carbon_copy = @email[:cc].formatted.join(', ')
-            custom_value = custom_field_value(issue,'copy-to')
-            custom_value.value = carbon_copy
-            custom_value.save( validate: false ) # skip validation!
+#          if (!@email.cc.nil?) && (custom_value.value == '1')
+#            carbon_copy = @email[:cc].formatted.join(', ')
+#            custom_value = custom_field_value(issue,'copy-to')
+#            custom_value.value = carbon_copy
+#            custom_value.save( validate: false ) # skip validation!
+	  if custom_value.value == '1'
+	  # Collect all recipients from CC and TO
+	  all_recipients = collect_all_copy_recipients(sender_email)
+	  	if all_recipients.any?
+		    custom_value = custom_field_value(issue,'copy-to')
+		    custom_value.value = all_recipients.join(', ')
+		    custom_value.save( validate: false )
+		    carbon_copy = all_recipients.join(', ')
+		else
+		    carbon_copy = nil
+		end
           else
             carbon_copy = nil
           end
@@ -129,6 +140,61 @@ module RedmineHelpdesk
         details << "Date: " + @email[:date].to_s + "\n"
         "<pre>\n" + Mail::Encodings.unquote_and_convert_to(details, 'utf-8') + "</pre>\n\n"
       end
+
+private
+
+def collect_all_copy_recipients(sender_email)
+  recipients = []
+  
+  # Add CC recipients
+  if @email.cc.present?
+    cc_addresses = @email[:cc].formatted rescue @email.cc
+    recipients += Array(cc_addresses)
+  end
+  
+  # Add additional TO recipients
+  if @email.to.present?
+    begin
+      all_to_addresses = @email[:to].formatted rescue @email.to
+      
+      # Define service emails (все адреса вашей техподдержки)
+      service_emails = [
+        'sender-redmine@consultant.ru',
+        'network@consultant.ru'
+      ]
+      
+      # Build exclusion list
+      excluded_emails = (
+        [sender_email, Setting.mail_from.to_s] + service_emails
+      ).compact.map(&:strip).map(&:downcase).uniq
+      
+      Rails.logger.debug "Helpdesk: Excluded emails: #{excluded_emails.inspect}"
+      
+      # Filter TO addresses
+      additional_to = Array(all_to_addresses).reject do |addr|
+        email_only = addr.match(/<(.+?)>/)&.[](1) || addr
+        email_only = email_only.strip.downcase
+        
+        is_excluded = excluded_emails.include?(email_only)
+        Rails.logger.debug "  Checking #{email_only}: #{is_excluded ? 'EXCLUDED' : 'INCLUDED'}"
+        
+        is_excluded
+      end
+      
+      recipients += additional_to
+      Rails.logger.info "Helpdesk: Added #{additional_to.size} TO recipients to copy-to"
+    rescue => e
+      Rails.logger.error "Helpdesk: Error processing TO addresses: #{e.message}"
+    end
+  end
+  
+  # Cleanup and deduplicate
+  result = recipients.uniq.compact.reject(&:blank?)
+  Rails.logger.info "Helpdesk: Final copy-to list (#{result.size} recipients): #{result.inspect}"
+  
+  result
+end
+
 
     end # module InstanceMethods
   end # module MailHandlerPatch

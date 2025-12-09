@@ -1,3 +1,24 @@
+
+0.0.21
+---
+### Fixed
+* **Multiple TO recipients in copy-to field**: All TO recipients (except sender and service emails) are now included in copy-to field along with CC recipients
+* **carbon_copy variable**: Properly defined in all code branches to prevent undefined variable errors
+
+### Added
+* New method `collect_all_copy_recipients(sender_email)` for comprehensive recipient collection
+* Enhanced logging for debugging recipient processing
+* Service emails exclusion list: sender-redmine@consultant.ru, network@consultant.ru
+
+### Changed
+* Replaced hardcoded CC-only logic with flexible TO+CC processing
+* Version bumped to 0.0.21
+
+### Technical Details
+* File modified: `lib/redmine_helpdesk/mail_handler_patch.rb`
+* Lines changed: ~60 additions (includes new method and logging)
+* Old code commented out (not deleted) for reference
+
 0.0.20
 ---
 * Make plugin compatibility with Redmine 5.0.x
