@@ -10,7 +10,7 @@ Redmine::Plugin.register :redmine_helpdesk do
   name 'Redmine helpdesk plugin'
   author 'Stefan Husch'
   description 'Redmine helpdesk plugin'
-  version '0.0.21'
+  version '0.0.22'
   requires_redmine :version_or_higher => '5.0.0'
   project_module :issue_tracking do
     permission :treat_user_as_supportclient, {}

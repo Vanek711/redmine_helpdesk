@@ -1,3 +1,9 @@
+0.0.22
+---
+- Extract name from From: header display_name
+- Fallback: derive name from email local part (ivan.petrov → Ivan Petrov)
+- Add 'From:' line at top of description with sender name and email
+- No new custom fields needed - use existing owner-email
 
 0.0.21
 ---

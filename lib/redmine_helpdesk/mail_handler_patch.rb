@@ -52,7 +52,17 @@ module RedmineHelpdesk
             carbon_copy = nil
           end
           
-          issue.description = email_details + issue.description
+#          issue.description = email_details + issue.description
+	  sender_name = if @email.from_addrs.present? && @email.from_addrs.first.display_name.present?
+	                  @email.from_addrs.first.display_name
+	                else
+	                  # Преобразуем email → имя
+	                  sender_email.split('@').first.split(/[._-]/).map(&:capitalize).join(' ')
+	                end
+
+	  # Добавляем строку с автором
+	  author_line = "**От:** #{sender_name} <#{sender_email}>\n\n"
+	  issue.description = author_line + email_details + issue.description
           issue.save( validate: false ) # skip validation!
           
           custom_value = custom_field_value(issue,'owner-email')
