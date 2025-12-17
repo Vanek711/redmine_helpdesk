@@ -33,14 +33,15 @@ module RedmineHelpdesk
           owner_email = issue.custom_value_for( CustomField.find_by_name('owner-email') ).value
           
           unless owner_email.blank?
-	  mail = HelpdeskMailer.email_to_supportclient(
-            issue, {
-              recipient: owner_email,
-              journal:   self,
-              text:      notes
-            }
-          )
-	  mail.deliver if mail
+            mail = HelpdeskMailer.email_to_supportclient(
+              issue, {
+                recipient: owner_email,
+                journal:   self,
+                text:      notes
+              }
+            )
+            mail.deliver if mail
+          end
         end
       end
       
