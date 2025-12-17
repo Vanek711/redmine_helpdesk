@@ -23,6 +23,12 @@ class HelpdeskMailer < ActionMailer::Base
     text = params[:text]
     carbon_copy = params[:carbon_copy]
 
+
+    if journal.nil? && text.to_s.strip.empty?
+      Rails.logger.info "HelpdeskMailer: skip first auto-reply for issue ##{issue.id}"
+      return nil
+    end
+
     redmine_headers 'Project' => issue.project.identifier,
                     'Issue-Id' => issue.id,
                     'Issue-Author' => issue.author.login
@@ -147,7 +153,7 @@ class HelpdeskMailer < ActionMailer::Base
     token_for(object, false)
   end
 
-  def message_id(object)
+	  def message_id(object)
     @message_id_object = object
   end
 

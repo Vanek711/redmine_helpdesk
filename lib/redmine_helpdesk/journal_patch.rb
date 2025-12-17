@@ -31,13 +31,16 @@ module RedmineHelpdesk
         if send_to_owner == true && notes.length != 0
           issue = self.journalized.reload
           owner_email = issue.custom_value_for( CustomField.find_by_name('owner-email') ).value
-          HelpdeskMailer.email_to_supportclient(
+          
+          unless owner_email.blank?
+	  mail = HelpdeskMailer.email_to_supportclient(
             issue, {
               recipient: owner_email,
               journal:   self,
               text:      notes
             }
-          ).deliver unless owner_email.blank?
+          )
+	  mail.deliver if mail
         end
       end
       
