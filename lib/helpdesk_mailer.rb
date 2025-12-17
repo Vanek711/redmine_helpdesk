@@ -94,6 +94,11 @@ class HelpdeskMailer < ActionMailer::Base
       @issue = issue
       @journal = journal
       @issue_url = url_for(:controller => 'issues', :action => 'show', :id => issue)
+      
+
+      template = @journal.present? ? 'issue_edit' : 'issue_add'
+
+
       mail(
         :from     => sender.present? && sender || Setting.mail_from,
         :reply_to => sender.present? && sender || Setting.mail_from,
