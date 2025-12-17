@@ -106,7 +106,7 @@ class HelpdeskMailer < ActionMailer::Base
         :subject  => subject,
         :date     => Time.zone.now,
         :template_path => 'mailer',
-        :template_name => 'issue_edit',
+        :template_name => template,
         :cc            => carbon_copy
       )
     end
