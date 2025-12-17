@@ -101,10 +101,6 @@ class HelpdeskMailer < ActionMailer::Base
       @journal = journal
       @issue_url = url_for(:controller => 'issues', :action => 'show', :id => issue)
       
-
-      template = @journal.present? ? 'issue_edit' : 'issue_add'
-
-
       mail(
         :from     => sender.present? && sender || Setting.mail_from,
         :reply_to => sender.present? && sender || Setting.mail_from,
@@ -112,7 +108,7 @@ class HelpdeskMailer < ActionMailer::Base
         :subject  => subject,
         :date     => Time.zone.now,
         :template_path => 'mailer',
-        :template_name => template,
+        :template_name => 'issue_edit',
         :cc            => carbon_copy
       )
     end
