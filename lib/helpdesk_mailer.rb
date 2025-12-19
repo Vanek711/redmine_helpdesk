@@ -76,21 +76,35 @@ class HelpdeskMailer < ActionMailer::Base
     mail = if text.present? || reply.present?
       # sending out the journal note to the support client
       # or the first reply message
+
       t = text.present? ? "#{text}\n\n#{footer}" : reply
       body = expand_macros(t, issue, journal)
-      
 
-      # ---- Цитирование предыдущего комментария ----
+      # ---- История переписки: описание + все предыдущие публичные комментарии ----
       if journal.present?
-        previous_journal = issue.journals.
+        history_chunks = []
+
+        # 1. Самое первое письмо клиента – в описании задачи
+        if issue.description.present?
+          history_chunks << issue.description
+        end
+
+        # 2. Все предыдущие журналы с непустыми, не приватными notes
+        previous_notes = issue.journals.
           where("id < ?", journal.id).
           where(private_notes: false).
           where.not(notes: [nil, ""]).
-          order(:id).last
+          order(:id).
+          pluck(:notes)
 
-        if previous_journal
-          quoted_prev = previous_journal.notes.to_s.lines.map { |line| "> #{line}" }.join
-          body = "#{body}\n\n----- Предыдущее сообщение -----\n#{quoted_prev}"
+        history_chunks.concat(previous_notes)
+
+        if history_chunks.any?
+          quoted_history = history_chunks.map { |txt|
+            txt.to_s.lines.map { |line| "> #{line}" }.join
+          }.join("\n\n-----\n\n")
+
+          body = "#{body}\n\n----- История переписки -----\n#{quoted_history}"
         end
       end
       # ---- конец вставки ----
