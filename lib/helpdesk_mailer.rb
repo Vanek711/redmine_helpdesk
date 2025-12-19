@@ -78,6 +78,22 @@ class HelpdeskMailer < ActionMailer::Base
       # or the first reply message
       t = text.present? ? "#{text}\n\n#{footer}" : reply
       body = expand_macros(t, issue, journal)
+      
+
+      # ---- Цитирование предыдущего комментария ----
+      if journal.present?
+        previous_journal = issue.journals.
+          where("id < ?", journal.id).
+          where(private_notes: false).
+          where.not(notes: [nil, ""]).
+          order(:id).last
+
+        if previous_journal
+          quoted_prev = previous_journal.notes.to_s.lines.map { |line| "> #{line}" }.join
+          body = "#{body}\n\n----- Предыдущее сообщение -----\n#{quoted_prev}"
+        end
+      end
+      # ---- конец вставки ----
 
       # precess reply-separator
       f = CustomField.find_by_name('helpdesk-reply-separator')
