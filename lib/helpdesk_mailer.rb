@@ -111,10 +111,11 @@ class HelpdeskMailer < ActionMailer::Base
           (sender.present? && sender) || Setting.mail_from
         )
 
-        if header_block.present?
-          body = "#{body}\n\n#{header_block}\n\n----- История переписки -----\n#{quoted_history}"
-        else
-          body = "#{body}\n\n----- История переписки -----\n#{quoted_history}"
+          if header_block.present?
+            body = "#{body}\n\n#{header_block}\n\n----- История переписки -----\n#{quoted_history}"
+          else
+            body = "#{body}\n\n----- История переписки -----\n#{quoted_history}"
+          end
         end
       end
       # ---- конец вставки ----
