@@ -104,6 +104,16 @@ class HelpdeskMailer < ActionMailer::Base
             txt.to_s.lines.map { |line| "> #{line}" }.join
           }.join("\n\n-----\n\n")
 
+        header_block = build_reply_header_block(
+          issue,
+          journal,
+          recipient,
+          (sender.present? && sender) || Setting.mail_from
+        )
+
+        if header_block.present?
+          body = "#{body}\n\n#{header_block}\n\n----- История переписки -----\n#{quoted_history}"
+        else
           body = "#{body}\n\n----- История переписки -----\n#{quoted_history}"
         end
       end
@@ -187,4 +197,70 @@ class HelpdeskMailer < ActionMailer::Base
     @references_objects ||= []
     @references_objects << object
   end
+
+  def helpdesk_ticket_for(issue)
+    return nil unless issue.respond_to?(:helpdesk_ticket)
+    issue.helpdesk_ticket
+  rescue
+    nil
+  end
+
+  def build_reply_header_block(issue, journal, recipient, sender_email)
+    ticket = helpdesk_ticket_for(issue)
+
+    # "От:" — стараемся показать клиента
+    customer_email =
+      (ticket && (ticket.respond_to?(:customer_email) ? ticket.customer_email : nil)).presence ||
+      (ticket && (ticket.respond_to?(:email) ? ticket.email : nil)).presence ||
+      recipient.to_s
+
+    customer_name =
+      (ticket && (ticket.respond_to?(:customer_name) ? ticket.customer_name : nil)).presence ||
+      (ticket && (ticket.respond_to?(:name) ? ticket.name : nil)).presence
+
+    from_str = if customer_name.present? && customer_email.present?
+      "#{customer_name} <#{customer_email}>"
+    else
+      customer_email
+    end
+
+    # "Кому:" — адрес поддержки
+    support_email =
+      (ticket && (ticket.respond_to?(:support_email) ? ticket.support_email : nil)).presence ||
+      sender_email.presence ||
+      Setting.mail_from.to_s
+
+    # "Отправлено:" — время сообщения, на которое отвечаем:
+    # берём предыдущий публичный журнал с notes (перед текущим journal)
+    sent_time = nil
+    if journal.present?
+      prev = issue.journals.
+        where("id < ?", journal.id).
+        where(private_notes: false).
+        where.not(notes: [nil, ""]).
+        order(:id).
+        last
+      sent_time = prev&.created_on
+    end
+    sent_time ||= issue.created_on
+
+    # "Тема:"
+    subj = issue.subject.to_s
+
+    # Формат времени “как в письмах”
+    sent_str = begin
+      I18n.l(sent_time, format: :helpdesk_quote_header).to_s.strip
+    rescue
+      sent_time.to_s
+    end
+
+    lines = []
+    lines << "От: #{from_str}" if from_str.present?
+    lines << "Отправлено: #{sent_str}" if sent_str.present?
+    lines << "Кому: #{support_email}" if support_email.present?
+    lines << "Тема: #{subj}" if subj.present?
+
+    lines.join("\n")
+  end
+
 end
