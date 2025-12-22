@@ -82,34 +82,65 @@ class HelpdeskMailer < ActionMailer::Base
 
       # ---- История переписки: описание + все предыдущие публичные комментарии ----
       if journal.present?
-        history_chunks = []
+        history_entries = []
 
-        # 1. Самое первое письмо клиента – в описании задачи
+        # 1) Первое письмо (описание задачи)
         if issue.description.present?
-          history_chunks << issue.description
+          # автор “первого письма” лучше брать из helpdesk ticket, иначе будет user=imap
+          ticket = helpdesk_ticket_for(issue)
+          customer_email =
+            (ticket && (ticket.respond_to?(:customer_email) ? ticket.customer_email : nil)).presence ||
+            recipient.to_s
+          customer_name =
+            (ticket && (ticket.respond_to?(:customer_name) ? ticket.customer_name : nil)).presence
+          author_str = customer_name.present? ? "#{customer_name} <#{customer_email}>" : customer_email
+
+          history_entries << {
+            time: issue.created_on,
+            author: author_str,
+            text: issue.description
+          }
         end
 
-        # 2. Все предыдущие журналы с непустыми, не приватными notes
-        previous_notes = issue.journals.
+        # 2) Все предыдущие публичные комментарии (журналы) — ВАЖНО: не pluck, а сами объекты
+        prev_journals = issue.journals.
           where("id < ?", journal.id).
           where(private_notes: false).
           where.not(notes: [nil, ""]).
-          order(:id).
-          pluck(:notes)
+          includes(:user).
+          order(:id)
 
-        history_chunks.concat(previous_notes)
+        prev_journals.each do |j|
+          history_entries << {
+            time: j.created_on,
+            author: (j.user ? j.user.name : "unknown"),
+            text: j.notes
+          }
+        end
 
-        if history_chunks.any?
-          quoted_history = history_chunks.map { |txt|
-            txt.to_s.lines.map { |line| "> #{line}" }.join
-          }.join("\n\n-----\n\n")
+        if history_entries.any?
+          quoted_history = history_entries.map do |e|
+            ts = format_msk_time(e[:time])
+            who = e[:author].to_s
 
-        header_block = build_reply_header_block(
-          issue,
-          journal,
-          recipient,
-          (sender.present? && sender) || Setting.mail_from
-        )
+            # Заголовок каждого блока
+            block_header = []
+            block_header << "От: #{who}" if who.present?
+            block_header << "Отправлено: #{ts}" if ts.present?
+
+            # Цитирование текста
+            quoted_text = e[:text].to_s.lines.map { |line| "> #{line}" }.join
+
+            # Итоговый блок: заголовок + цитата
+            ([block_header.join("\n"), quoted_text].reject(&:blank?).join("\n"))
+          end.join("\n\n-----\n\n")
+
+          header_block = build_reply_header_block(
+            issue,
+            journal,
+            recipient,
+            (sender.present? && sender) || Setting.mail_from
+          )
 
           if header_block.present?
             body = "#{body}\n\n#{header_block}\n\n----- История переписки -----\n#{quoted_history}"
@@ -247,12 +278,13 @@ class HelpdeskMailer < ActionMailer::Base
 
     # "Тема:"
     subj = issue.subject.to_s
+    msk_time = sent_time.in_time_zone("Europe/Moscow")
 
     # Формат времени “как в письмах”
     sent_str = begin
       I18n.l(sent_time, format: :helpdesk_quote_header).to_s.strip
     rescue
-      sent_time.to_s
+        msk_time.strftime("%Y-%m-%d %H:%M:%S %Z")
     end
 
     lines = []
