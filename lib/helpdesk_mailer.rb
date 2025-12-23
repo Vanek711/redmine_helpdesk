@@ -278,14 +278,8 @@ class HelpdeskMailer < ActionMailer::Base
 
     # "Тема:"
     subj = issue.subject.to_s
-    msk_time = sent_time.in_time_zone("Europe/Moscow")
 
-    # Формат времени “как в письмах”
-    sent_str = begin
-      I18n.l(sent_time, format: :helpdesk_quote_header).to_s.strip
-    rescue
-        msk_time.strftime("%Y-%m-%d %H:%M:%S %Z")
-    end
+    sent_str = format_msk_time(sent_time)
 
     lines = []
     lines << "От: #{from_str}" if from_str.present?
