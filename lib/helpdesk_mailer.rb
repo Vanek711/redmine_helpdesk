@@ -296,4 +296,13 @@ class HelpdeskMailer < ActionMailer::Base
     lines.join("\n")
   end
 
+  def format_msk_time(t)
+    return "" unless t
+    msk = t.in_time_zone("Europe/Moscow")
+    begin
+      I18n.l(msk, format: :helpdesk_quote_header).to_s.strip
+    rescue
+      msk.strftime("%Y-%m-%d %H:%M:%S %Z")
+    end
+  end
 end
