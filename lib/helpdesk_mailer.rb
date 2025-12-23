@@ -95,6 +95,8 @@ class HelpdeskMailer < ActionMailer::Base
             (ticket && (ticket.respond_to?(:customer_name) ? ticket.customer_name : nil)).presence
           author_str = customer_name.present? ? "#{customer_name} <#{customer_email}>" : customer_email
 
+          customer_name = redmine_user_name_by_email(customer_email) if customer_name.blank?          
+
           history_entries << {
             time: issue.created_on,
             author: author_str,
@@ -113,7 +115,7 @@ class HelpdeskMailer < ActionMailer::Base
         prev_journals.each do |j|
           history_entries << {
             time: j.created_on,
-            author: (j.user ? j.user.name : "unknown"),
+            author: (j.user ? "#{j.user.name} <#{j.user.mail}>" : "unknown"),
             text: j.notes
           }
         end
@@ -298,5 +300,16 @@ class HelpdeskMailer < ActionMailer::Base
     rescue
       msk.strftime("%Y-%m-%d %H:%M:%S %Z")
     end
+  end
+
+
+  def redmine_user_name_by_email(email)
+    return nil if email.blank?
+    e = email.to_s.strip.downcase
+    u = ::User.respond_to?(:active) ? ::User.active.where("LOWER(mail) = ?", e).first
+                                   : ::User.where("LOWER(mail) = ?", e).first
+    u&.name
+  rescue
+    nil
   end
 end
