@@ -91,10 +91,11 @@ class HelpdeskMailer < ActionMailer::Base
           customer_email =
             (ticket && (ticket.respond_to?(:customer_email) ? ticket.customer_email : nil)).presence ||
             recipient.to_s
-          customer_name =
-            (ticket && (ticket.respond_to?(:customer_name) ? ticket.customer_name : nil)).presence
 
-          customer_name = redmine_user_name_by_email(customer_email) if customer_name.blank?          
+        customer_name =
+          redmine_user_name_by_email(customer_email).presence ||
+          (ticket && (ticket.respond_to?(:customer_name) ? ticket.customer_name : nil)).presence ||
+          (ticket && (ticket.respond_to?(:name) ? ticket.name : nil)).presence
 
           author_str = customer_name.present? ? "#{customer_name} <#{customer_email}>" : customer_email
 
@@ -305,14 +306,43 @@ class HelpdeskMailer < ActionMailer::Base
     end
   end
 
-
   def redmine_user_name_by_email(email)
-    return nil if email.blank?
-    e = email.to_s.strip.downcase
-    u = ::User.respond_to?(:active) ? ::User.active.where("LOWER(mail) = ?", e).first
-                                   : ::User.where("LOWER(mail) = ?", e).first
-    u&.name
-  rescue
+    e = extract_email(email).to_s.strip.downcase
+    return nil if e.blank?
+
+  # Redmine умеет сам искать по email_addresses
+    if ::User.respond_to?(:find_by_mail)
+      u = ::User.find_by_mail(e)
+      return u.name if u
+    end
+
+    # Фолбэк на модель EmailAddress (Redmine 4/5)
+    if defined?(::EmailAddress)
+      ea = ::EmailAddress.includes(:user).where("LOWER(address) = ?", e).first
+      return ea.user.name if ea&.user
+    end
+
+    # На случай очень старой схемы
+    if ::User.respond_to?(:column_names) && ::User.column_names.include?("mail")
+      u = ::User.where("LOWER(mail) = ?", e).first
+      return u.name if u
+    end
+
+    nil
+  rescue => ex
+    Rails.logger.warn("HelpdeskMailer redmine_user_name_by_email failed: #{ex.class}: #{ex.message}")
     nil
   end
+
+  def extract_email(value)
+    v = value.to_s.strip
+    return "" if v.empty?
+
+    begin
+      Mail::Address.new(v).address.to_s
+    rescue
+      v[/[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}/i].to_s
+    end
+  end
+
 end
