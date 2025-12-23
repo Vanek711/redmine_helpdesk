@@ -23,7 +23,6 @@ class HelpdeskMailer < ActionMailer::Base
     text = params[:text]
     carbon_copy = params[:carbon_copy]
 
-
     if journal.nil? && text.to_s.strip.empty?
       Rails.logger.info "HelpdeskMailer: skip first auto-reply for issue ##{issue.id}"
       return nil
@@ -37,23 +36,27 @@ class HelpdeskMailer < ActionMailer::Base
     references issue
 
     subject = "[#{issue.project.name} - ##{issue.id}] #{issue.subject}"
+
     # Set 'from' email-address to 'helpdesk-sender-email' if available.
     # Falls back to regular redmine behaviour if 'sender' is empty.
     p = issue.project
     s = CustomField.find_by_name('helpdesk-sender-email')
     sender = p.custom_value_for(s).try(:value) if p.present? && s.present?
+
     # If a custom field with text for the first reply is
     # available then use this one instead of the regular
     r = CustomField.find_by_name('helpdesk-first-reply')
     f = CustomField.find_by_name('helpdesk-email-footer')
     reply  = p.nil? || r.nil? ? '' : p.custom_value_for(r).try(:value)
     footer = p.nil? || f.nil? ? '' : p.custom_value_for(f).try(:value)
+
     # add carbon copy
     ct = CustomField.find_by_name('copy-to')
     if carbon_copy.nil?
       carbon_copy = issue.custom_value_for(ct).try(:value)
     end
-    # add any attachements
+
+    # add any attachments
     if journal.present? && text.present?
       journal.details.each do |d|
         if d.property == 'attachment'
@@ -66,12 +69,14 @@ class HelpdeskMailer < ActionMailer::Base
         end
       end
     end
+
     if @message_id_object
       headers[:message_id] = "<#{self.class.message_id_for(@message_id_object)}>"
     end
     if @references_objects
-      headers[:references] = @references_objects.collect {|o| "<#{self.class.references_for(o)}>"}.join(' ')
+      headers[:references] = @references_objects.collect { |o| "<#{self.class.references_for(o)}>" }.join(' ')
     end
+
     # create mail object to deliver
     mail = if text.present? || reply.present?
       # sending out the journal note to the support client
@@ -86,16 +91,19 @@ class HelpdeskMailer < ActionMailer::Base
 
         # 1) Первое письмо (описание задачи)
         if issue.description.present?
-          # автор “первого письма” лучше брать из helpdesk ticket, иначе будет user=imap
           ticket = helpdesk_ticket_for(issue)
+
           customer_email =
             (ticket && (ticket.respond_to?(:customer_email) ? ticket.customer_email : nil)).presence ||
             recipient.to_s
+          customer_email = extract_email(customer_email)
 
-        customer_name =
-          redmine_user_name_by_email(customer_email).presence ||
-          (ticket && (ticket.respond_to?(:customer_name) ? ticket.customer_name : nil)).presence ||
-          (ticket && (ticket.respond_to?(:name) ? ticket.name : nil)).presence
+          ticket_name =
+            (ticket && (ticket.respond_to?(:customer_name) ? ticket.customer_name : nil)).presence ||
+            (ticket && (ticket.respond_to?(:name) ? ticket.name : nil)).presence
+
+          # ВАЖНО: приоритет имени из Redmine по email, затем ticket
+          customer_name = redmine_user_name_by_email(customer_email).presence || ticket_name
 
           author_str = customer_name.present? ? "#{customer_name} <#{customer_email}>" : customer_email
 
@@ -106,7 +114,7 @@ class HelpdeskMailer < ActionMailer::Base
           }
         end
 
-        # 2) Все предыдущие публичные комментарии (журналы) — ВАЖНО: не pluck, а сами объекты
+        # 2) Все предыдущие публичные комментарии (журналы)
         prev_journals = issue.journals.
           where("id < ?", journal.id).
           where(private_notes: false).
@@ -135,7 +143,6 @@ class HelpdeskMailer < ActionMailer::Base
             # Цитирование текста
             quoted_text = e[:text].to_s.lines.map { |line| "> #{line}" }.join
 
-            # Итоговый блок: заголовок + цитата
             ([block_header.join("\n"), quoted_text].reject(&:blank?).join("\n"))
           end.join("\n\n-----\n\n")
 
@@ -155,7 +162,7 @@ class HelpdeskMailer < ActionMailer::Base
       end
       # ---- конец вставки ----
 
-      # precess reply-separator
+      # process reply-separator
       f = CustomField.find_by_name('helpdesk-reply-separator')
       reply_separator = issue.project.custom_value_for(f).try(:value)
       if !reply_separator.blank?
@@ -176,7 +183,7 @@ class HelpdeskMailer < ActionMailer::Base
       @issue = issue
       @journal = journal
       @issue_url = url_for(:controller => 'issues', :action => 'show', :id => issue)
-      
+
       mail(
         :from     => sender.present? && sender || Setting.mail_from,
         :reply_to => sender.present? && sender || Setting.mail_from,
@@ -188,27 +195,26 @@ class HelpdeskMailer < ActionMailer::Base
         :cc            => carbon_copy
       )
     end
+
     # return mail object to deliver it
-    return mail
+    mail
   end
 
   private
 
   # Appends a Redmine header field (name is prepended with 'X-Redmine-')
   def redmine_headers(h)
-    h.each { |k,v| headers["X-Redmine-#{k}"] = v.to_s }
+    h.each { |k, v| headers["X-Redmine-#{k}"] = v.to_s }
   end
 
-  def self.token_for(object, rand=true)
+  def self.token_for(object, rand = true)
     timestamp = object.send(object.respond_to?(:created_on) ? :created_on : :updated_on)
     hash = [
       "redmine",
       "#{object.class.name.demodulize.underscore}-#{object.id}",
       timestamp.strftime("%Y%m%d%H%M%S")
     ]
-    if rand
-      hash << Redmine::Utils.random_hex(8)
-    end
+    hash << Redmine::Utils.random_hex(8) if rand
     host = Setting.mail_from.to_s.strip.gsub(%r{^.*@|>}, '')
     host = "#{::Socket.gethostname}.redmine" if host.empty?
     "#{hash.join('.')}@#{host}"
@@ -225,7 +231,7 @@ class HelpdeskMailer < ActionMailer::Base
     token_for(object, false)
   end
 
-	  def message_id(object)
+  def message_id(object)
     @message_id_object = object
   end
 
@@ -249,12 +255,14 @@ class HelpdeskMailer < ActionMailer::Base
       (ticket && (ticket.respond_to?(:customer_email) ? ticket.customer_email : nil)).presence ||
       (ticket && (ticket.respond_to?(:email) ? ticket.email : nil)).presence ||
       recipient.to_s
+    customer_email = extract_email(customer_email)
 
-    customer_name =
+    ticket_name =
       (ticket && (ticket.respond_to?(:customer_name) ? ticket.customer_name : nil)).presence ||
       (ticket && (ticket.respond_to?(:name) ? ticket.name : nil)).presence
 
-    customer_name = redmine_user_name_by_email(customer_email) if customer_name.blank?
+    # Приоритет: Redmine user по email, затем то, что пришло из helpdesk ticket
+    customer_name = redmine_user_name_by_email(customer_email).presence || ticket_name
 
     from_str = if customer_name.present? && customer_email.present?
       "#{customer_name} <#{customer_email}>"
@@ -310,22 +318,16 @@ class HelpdeskMailer < ActionMailer::Base
     e = extract_email(email).to_s.strip.downcase
     return nil if e.blank?
 
-  # Redmine умеет сам искать по email_addresses
+    # В вашем Redmine это работает (вы проверяли)
     if ::User.respond_to?(:find_by_mail)
       u = ::User.find_by_mail(e)
       return u.name if u
     end
 
-    # Фолбэк на модель EmailAddress (Redmine 4/5)
+    # Фолбэк на EmailAddress (если вдруг понадобится)
     if defined?(::EmailAddress)
       ea = ::EmailAddress.includes(:user).where("LOWER(address) = ?", e).first
       return ea.user.name if ea&.user
-    end
-
-    # На случай очень старой схемы
-    if ::User.respond_to?(:column_names) && ::User.column_names.include?("mail")
-      u = ::User.where("LOWER(mail) = ?", e).first
-      return u.name if u
     end
 
     nil
@@ -344,5 +346,4 @@ class HelpdeskMailer < ActionMailer::Base
       v[/[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}/i].to_s
     end
   end
-
 end
