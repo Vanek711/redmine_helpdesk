@@ -93,9 +93,10 @@ class HelpdeskMailer < ActionMailer::Base
             recipient.to_s
           customer_name =
             (ticket && (ticket.respond_to?(:customer_name) ? ticket.customer_name : nil)).presence
-          author_str = customer_name.present? ? "#{customer_name} <#{customer_email}>" : customer_email
 
           customer_name = redmine_user_name_by_email(customer_email) if customer_name.blank?          
+
+          author_str = customer_name.present? ? "#{customer_name} <#{customer_email}>" : customer_email
 
           history_entries << {
             time: issue.created_on,
@@ -251,6 +252,8 @@ class HelpdeskMailer < ActionMailer::Base
     customer_name =
       (ticket && (ticket.respond_to?(:customer_name) ? ticket.customer_name : nil)).presence ||
       (ticket && (ticket.respond_to?(:name) ? ticket.name : nil)).presence
+
+    customer_name = redmine_user_name_by_email(customer_email) if customer_name.blank?
 
     from_str = if customer_name.present? && customer_email.present?
       "#{customer_name} <#{customer_email}>"
