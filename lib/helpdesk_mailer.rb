@@ -139,7 +139,7 @@ class HelpdeskMailer < ActionMailer::Base
             block_header = []
             block_header << "От: #{who}" if who.present?
             block_header << "Отправлено: #{ts}" if ts.present?
-
+            block_header << "Тема: #{issue.subject}" if issue.subject.present?
             # Цитирование текста
             quoted_text = e[:text].to_s.lines.map { |line| "> #{line}" }.join
 
