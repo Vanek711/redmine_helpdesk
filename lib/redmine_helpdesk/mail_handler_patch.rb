@@ -168,7 +168,8 @@ module RedmineHelpdesk
         details << "To:   " + @email[:to].formatted.join(', ') + "\n" if !@email.to.nil?
         details << "Cc:   " + @email[:cc].formatted.join(', ') + "\n" if !@email.cc.nil?
         details << "Date: " + @email[:date].to_s + "\n"
-        "<pre>\n" + Mail::Encodings.unquote_and_convert_to(details, 'utf-8') + "</pre>\n\n"
+        details << "Subject: " + @email.subject.to_s + "\n" if @email.subject.present?
+	"<pre>\n" + Mail::Encodings.unquote_and_convert_to(details, 'utf-8') + "</pre>\n\n"
       end
 
 private
