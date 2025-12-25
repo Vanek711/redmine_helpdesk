@@ -108,6 +108,7 @@ class HelpdeskMailer < ActionMailer::Base
           author_str = customer_name.present? ? "#{customer_name} <#{customer_email}>" : customer_email
 
           history_entries << {
+            seq: 0, # описание всегда самое старое
             time: issue.created_on,
             author: author_str,
             text: issue.description
@@ -124,6 +125,7 @@ class HelpdeskMailer < ActionMailer::Base
 
         prev_journals.each do |j|
           history_entries << {
+            seq: j.id, # порядок журналов
             time: j.created_on,
             author: (j.user ? "#{j.user.name} <#{j.user.mail}>" : "unknown"),
             text: j.notes
@@ -131,7 +133,10 @@ class HelpdeskMailer < ActionMailer::Base
         end
 
         if history_entries.any?
-          quoted_history = history_entries.map do |e|
+          # НОВОЕ СВЕРХУ: сортируем по seq и переворачиваем
+          sorted_entries = history_entries.sort_by { |e| e[:seq].to_i }.reverse
+
+          quoted_history = sorted_entries.map do |e|
             ts = format_msk_time(e[:time])
             who = e[:author].to_s
 
@@ -140,6 +145,7 @@ class HelpdeskMailer < ActionMailer::Base
             block_header << "От: #{who}" if who.present?
             block_header << "Отправлено: #{ts}" if ts.present?
             block_header << "Тема: #{issue.subject}" if issue.subject.present?
+
             # Цитирование текста
             quoted_text = e[:text].to_s.lines.map { |line| "> #{line}" }.join
 
@@ -277,7 +283,6 @@ class HelpdeskMailer < ActionMailer::Base
       Setting.mail_from.to_s
 
     # "Отправлено:" — время сообщения, на которое отвечаем:
-    # берём предыдущий публичный журнал с notes (перед текущим journal)
     sent_time = nil
     if journal.present?
       prev = issue.journals.
@@ -290,9 +295,7 @@ class HelpdeskMailer < ActionMailer::Base
     end
     sent_time ||= issue.created_on
 
-    # "Тема:"
     subj = issue.subject.to_s
-
     sent_str = format_msk_time(sent_time)
 
     lines = []
@@ -318,13 +321,11 @@ class HelpdeskMailer < ActionMailer::Base
     e = extract_email(email).to_s.strip.downcase
     return nil if e.blank?
 
-    # В вашем Redmine это работает (вы проверяли)
     if ::User.respond_to?(:find_by_mail)
       u = ::User.find_by_mail(e)
       return u.name if u
     end
 
-    # Фолбэк на EmailAddress (если вдруг понадобится)
     if defined?(::EmailAddress)
       ea = ::EmailAddress.includes(:user).where("LOWER(address) = ?", e).first
       return ea.user.name if ea&.user
